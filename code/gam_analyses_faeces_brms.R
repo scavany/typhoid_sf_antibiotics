@@ -5,28 +5,19 @@ library(brms)
 library(rstan)
 
 # options
-rstan_options(auto_write = TRUE)
 options(mc.cores = (parallel::detectCores() / 2))
 
-if(basename(getwd())!="typhoid_data") setwd("~/Documents/sf_drugs_projects/typhoid_data")
-while (!is.null(dev.list())) dev.off()
+# Clear workspace
 rm(list=ls())
 
 ## Source functions
-source("~/Documents/sf_drugs_projects/typhoid_data/code/gam_analyses_fn.R")
+source("./code/gam_analyses_fn.R")
 
 ## Load data
-use.imputed <- TRUE
-if (!use.imputed) {
-  load("./data/formatted_datatables.RData")
-} else {
-  load("./data/formatted_datatables_imputedwt.RData")
-}
-data.Ab <- copy(data.O) # insert the used data frame here
-## Cro, Ce, A have insufficient data for GAM
-
+load("./data/synthetic_datatables.RData")
+data.Ab$sty1 <- factor(data.Ab$sty1)
+  
 ## Additional variables
-data.Ab[,extraDur:=(DurAb1 - DurRand)]
 data.Ab[,doseperMIC:=dose/OfMIC]
 data.Ab[,Age.scaled:=scale(Age)]
 
@@ -34,14 +25,6 @@ data.Ab[,Age.scaled:=scale(Age)]
 data.Ab$sty1 <- factor(data.Ab$sty1)
 
 ## 1. outcome: FCT38
-## Check difference between missing and included data
-data.Ab[,.(
-  mean(totaldose_alloc,na.rm=TRUE),
-  sd(totaldose_alloc,na.rm=TRUE) / sqrt(sum(!is.na(totaldose_alloc)))
-), by = is.na(F2P)]
-data.Ab[,.(mean(OfMIC,na.rm=TRUE),sd(OfMIC,na.rm=TRUE) / sqrt(sum(!is.na(OfMIC)))),by = is.na(F2P)]
-data.Ab[,.(mean(wt,na.rm=TRUE),sd(wt,na.rm=TRUE) / sqrt(sum(!is.na(wt)))),by = is.na(F2P)]
-
 ## We first want to account for the fact that we know a bit more than this
 ## - some are pos, but we don't know how many of their samples were pos
 ## First create a test model, to get the stan code and data

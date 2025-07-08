@@ -6,46 +6,15 @@ library(brms)
 # options
 options(mc.cores = (parallel::detectCores() / 2))
 
-# Working directory
-if(basename(getwd())!="typhoid_data") setwd("~/Documents/sf_drugs_projects/typhoid_data")
-while (!is.null(dev.list())) dev.off()
+# Clear workspace
 rm(list=ls())
 
 ## Source functions
-source("~/Documents/sf_drugs_projects/typhoid_data/code/gam_analyses_fn.R")
+source("./code/gam_analyses_fn.R")
 
 ## Load data
-use.imputed <- TRUE
-if (!use.imputed) {
-  load("./data/formatted_datatables.RData")
-} else {
-  load("./data/formatted_datatables_imputedwt.RData")
-}
-data.Ab <- copy(data.O) # insert the used data frame here
-## Cro, Ce, A have insufficient data for GAM
-# refactor the study variable
+load("./data/synthetic_datatables.RData")
 data.Ab$sty1 <- factor(data.Ab$sty1)
-
-# Produce summary statistics
-for (sty in unique(data.Ab$sty1)) {
-  print(sty)
-  if (sty %in% c("ct1", "ty2", "dtc")) {
-    for (dur in 3:2) {
-      print(dur)
-      print(length(data.Ab[sty1 == sty & DurRand == dur]$Sex))
-      print(1 - mean(data.Ab[sty1 == sty & DurRand == dur]$Sex, na.rm = TRUE))
-      print(quantile(data.Ab[sty1 == sty & DurRand == dur]$Age, na.rm = TRUE))
-      print(quantile(data.Ab[sty1 == sty & DurRand == dur]$wt, na.rm = TRUE))
-      print(quantile(data.Ab[sty1 == sty & DurRand == dur]$OfMIC, na.rm = TRUE))
-    }
-  } else {
-    print(length(data.Ab[sty1 == sty]$Sex))
-    print(1 - mean(data.Ab[sty1 == sty]$Sex, na.rm = TRUE))
-    print(quantile(data.Ab[sty1 == sty]$Age, na.rm = TRUE))
-    print(quantile(data.Ab[sty1 == sty]$wt, na.rm = TRUE))
-    print(quantile(data.Ab[sty1 == sty]$OfMIC, na.rm = TRUE))
-  }
-}
   
 # Remove unused columns to save space later
 data.Ab <- data.Ab[, .(fct38, failure, totaldose_alloc, OfMIC, wt, sty1)]
@@ -198,7 +167,7 @@ plot_gcomp_brms(
 
 ## 3. Compare to distributions
 ## Tabernero data
-load("../tabernero_data/tabernero_data.RData")
+load("./data/tabernero_data.RData")
 Ab.mean <- tabernero.individual[antibiotic=="OFX"]$mean / 100
 Ab.sd <- tabernero.individual[antibiotic=="OFX"]$sd / 100
 Ab.sdlog <- sqrt(log(1 + (Ab.sd / Ab.mean)^2))
@@ -229,73 +198,3 @@ lines(papi.range, dlnorm(papi.range, Ab.meanlog2, Ab.sdlog2), lwd = 2, lty = 2, 
 abline(v = c(0.90, 1.10), lty = 3)
 dev.off()
 
-# Calculations
-## # Add failure and other distribution, and do this on the cluster
-## set.seed(161)
-## cores <- 11
-## cl <- makeCluster(cores)
-## registerDoParallel(cl)
-## quantiles_desired <- c(0.05, 0.95)
-## mu_ate_sf.list <- foreach(jj = seq_along(MIC.range), .packages = c("brms", "data.table")) %dopar% {
-##   mu_ate_sf <- matrix(
-##     NA,
-##     nrow = length(targetdose.vec), ncol = 1 + length(quantiles_desired),
-##     dimnames = list(NULL, c("mean", quantiles_desired))
-##   )
-##   MIC.baseline <- MIC.range[jj]
-##   data.Ab.baseline[["OfMIC"]] <- MIC.baseline
-##   for (ii in seq_along(targetdose.vec)) {
-##     dose.baseline <- targetdose.vec[ii]
-##     data.Ab.baseline[["totaldose_alloc"]] <- dose.baseline
-##     mu_base <- posterior_epred(gam.Ab.fct, newdata = data.Ab.baseline)
-##     mu_sf <- matrix(NA, nrow = nrow(mu_base), ncol = ncol(mu_base))
-##     data.Ab.sf <- copy(data.Ab.baseline)
-##     for (kk in 1:nrow(mu_base)) {
-##       data.Ab.sf[["totaldose_alloc"]] <- dose.baseline *
-##         rlnorm(nrow(data.Ab.sf), Ab.meanlog, Ab.sdlog)
-##       mu_sf[kk, ] <- posterior_epred(gam.Ab.fct, newdata = data.Ab.sf, draw_ids = kk)
-##     }
-##     mu_ate_sf.temp <- rowMeans(mu_sf - mu_base)
-##     mu_ate_sf[ii, 1] <- mean(mu_ate_sf.temp)
-##     mu_ate_sf[ii, -1] <- quantile(mu_ate_sf.temp, probs = quantiles_desired)
-##   }
-##   mu_ate_sf
-## }
-
-## mu_ate_sf <- abind(mu_ate_sf.list, along = 3)
-## rm(mu_ate_sf.list)
-## stopCluster(cl)
-## # save(mu_ate_sf, file = "./data/mu_ate_sf.RData")
-
-load(file = "./data/mu_ate_sf.RData")
-pdf(
-  "./figs/sf_gformula_effect_fct_bymic_brms.pdf",
-  width = 17 / 2.54, height = 17 / 3 / 2.54
-)
-par(mfrow = c(1, 3), mar = c(4.1, 5.1, 2.1, 1.1))
-for (ii in seq_along(targetdose.vec)) {
-  plot(
-    MIC.range,
-    mu_ate_sf[ii, "mean", ],
-    ylim = range(mu_ate_sf[, c("0.05", "0.95"), ]),
-    lty = 1,
-    lwd = 2.5,
-    type = "l",
-    bty = "n",
-    xaxs = "i",
-    yaxs = "i",
-    log = "x",
-    main = paste0("target dose: ", round(targetdose.vec[ii]), " mg/kg"),
-    xlab = "MIC (mg/L)",
-    ylab = ifelse(ii == 1, "Expected change in mean\nfever clearance time (h)", "")
-  )
-  lines(MIC.range, mu_ate_sf[ii, "0.05", ], lty = 3)
-  lines(MIC.range, mu_ate_sf[ii, "0.95", ], lty = 3)
-  polygon(
-    c(MIC.range, rev(MIC.range)),
-    c(mu_ate_sf[ii, "0.05", ], rev(mu_ate_sf[ii, "0.95", ])),
-    col = adjustcolor("grey",0.3), border=FALSE
-  )
-  abline(h = 0, lty = 2)
-}
-dev.off()
