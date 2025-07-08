@@ -1,2 +1,2 @@
-# typhoid_sf_antibiotics
-Framework for estimating clinical impacts of SF antimicrobials, on typhoid
+# A framework for quantifying the clinical impact of substandard and falsified antimicrobials
+## With application to typhoid fever
